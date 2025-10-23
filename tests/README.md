@@ -29,6 +29,19 @@ Tests for TypeScript error handling type safety. Verifies that the codebase prop
 - Non-Error values (strings, objects, null, undefined) are converted safely
 - Type narrowing pattern works consistently across the codebase
 
+### `commands_test.ts`
+Tests for command implementation logic, argument parsing, and validation patterns. Tests logic without making actual API calls or importing command functions (which have side effects).
+
+**What it tests:**
+- Help text is exported and contains required information
+- Command parameter validation patterns (empty, single, multiple params)
+- File type detection (JSON vs plain text)
+- Content-Type determination logic
+- API endpoint selection based on document type
+- Command variation detection (task vs project, implicit vs explicit)
+- Options object structure and flags
+- Global option flags (output formats, target selection)
+
 ## Writing New Tests
 
 When adding new functionality to marvin-cli, add corresponding tests:
@@ -54,10 +67,11 @@ For tests that would normally call the Marvin API:
 
 ## Test Organization
 
-- `error_handling_test.ts` - Type safety and error handling tests
+- `error_handling_test.ts` - Type safety and error handling tests (5 tests)
+- `commands_test.ts` - Command logic, argument parsing, validation (20 tests)
 - (Future) `api_call_test.ts` - API request/response handling
-- (Future) `commands_test.ts` - CLI command parsing and execution
 - (Future) `localStorage_test.ts` - Local storage operations
+- (Future) `jsonl_output_test.ts` - JSONL output format (Phase 1)
 
 ## Continuous Integration
 
