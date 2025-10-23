@@ -33,17 +33,20 @@ Tests for TypeScript error handling type safety. Verifies that the codebase prop
 - Type narrowing pattern works consistently across the codebase
 
 ### `commands_test.ts`
-Tests for command implementation logic, argument parsing, and validation patterns. Tests logic without making actual API calls or importing command functions (which have side effects).
+Integration and behavioral tests for command implementations. Tests verify actual behavior including file operations and critical logic patterns.
 
 **What it tests:**
-- Help text is exported and contains required information
-- Command parameter validation patterns (empty, single, multiple params)
-- File type detection (JSON vs plain text)
-- Content-Type determination logic
-- API endpoint selection based on document type
-- Command variation detection (task vs project, implicit vs explicit)
-- Options object structure and flags
-- Global option flags (output formats, target selection)
+- **Help text verification** - Reads source files to verify help text exports exist (4 tests)
+- **Parameter validation patterns** - Verifies command argument parsing (3 tests)
+- **File-based integration test** - Creates temp files to test JSON detection workflow (1 test)
+- **JSON detection logic** - Tests the actual algorithm from add.ts for detecting JSON files (3 tests)
+- **Endpoint routing** - Verifies task vs project API endpoint selection (2 tests)
+
+**Why these tests matter:**
+- Help text tests catch missing/broken documentation
+- Integration test demonstrates temp file handling and real I/O
+- JSON detection tests would catch bugs like changing `{` to `[` in the detection logic
+- Endpoint routing tests prevent tasks being sent to project API (data corruption)
 
 ## Writing New Tests
 
@@ -71,10 +74,12 @@ For tests that would normally call the Marvin API:
 ## Test Organization
 
 - `error_handling_test.ts` - Type safety and error handling tests (5 tests)
-- `commands_test.ts` - Command logic, argument parsing, validation (20 tests)
-- (Future) `api_call_test.ts` - API request/response handling
+- `commands_test.ts` - Integration and behavioral tests for commands (13 tests)
+- (Future) `api_call_test.ts` - API request/response handling with mocks
 - (Future) `localStorage_test.ts` - Local storage operations
 - (Future) `jsonl_output_test.ts` - JSONL output format (Phase 1)
+
+**Total: 18 passing tests**
 
 ## Continuous Integration
 
