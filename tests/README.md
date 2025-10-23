@@ -5,19 +5,22 @@ This directory contains automated tests for marvin-cli using Deno's built-in tes
 ## Running Tests
 
 ```bash
-# Run all tests
-deno test tests/
+# Run all tests (requires --allow-read for command tests)
+deno test --allow-read tests/
 
 # Run with verbose output
-deno test --allow-all tests/
+deno test --allow-read tests/
 
 # Run a specific test file
-deno test tests/error_handling_test.ts
+deno test tests/error_handling_test.ts  # No permissions needed
+deno test --allow-read tests/commands_test.ts  # Requires file read access
 
 # Generate coverage report
-deno test --coverage=coverage/ tests/
+deno test --allow-read --coverage=coverage/ tests/
 deno coverage coverage/
 ```
+
+**Note:** Command tests require `--allow-read` permission because they read source files to verify help text without importing (which avoids localStorage initialization side effects).
 
 ## Test Files
 

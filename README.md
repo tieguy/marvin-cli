@@ -65,7 +65,7 @@ Download a release for your platform [here](https://github.com/amazingmarvin/mar
 Run the test suite using Deno's built-in test framework:
 
 ```bash
-deno test tests/
+deno test --allow-read tests/
 ```
 
 See `tests/README.md` for more details on the test suite.
