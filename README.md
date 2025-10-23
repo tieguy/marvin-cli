@@ -65,10 +65,10 @@ Download a release for your platform [here](https://github.com/amazingmarvin/mar
 Run the test suite using Deno's built-in test framework:
 
 ```bash
-deno test --allow-read tests/
+deno test tests/
 ```
 
-See `tests/README.md` for more details on the test suite.
+See `tests/README.md` for more details on the test suite and testing philosophy.
 
 For contributors: See `CONTRIBUTING.md` for guidelines on writing tests and submitting pull requests.
 

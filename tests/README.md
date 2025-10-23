@@ -5,87 +5,77 @@ This directory contains automated tests for marvin-cli using Deno's built-in tes
 ## Running Tests
 
 ```bash
-# Run all tests (requires --allow-read for command tests)
-deno test --allow-read tests/
-
-# Run with verbose output
-deno test --allow-read tests/
-
-# Run a specific test file
-deno test tests/error_handling_test.ts  # No permissions needed
-deno test --allow-read tests/commands_test.ts  # Requires file read access
-
-# Generate coverage report
-deno test --allow-read --coverage=coverage/ tests/
-deno coverage coverage/
+# Run all tests
+deno test tests/
 ```
-
-**Note:** Command tests require `--allow-read` permission because they read source files to verify help text without importing (which avoids localStorage initialization side effects).
 
 ## Test Files
 
-### `error_handling_test.ts`
-Tests for TypeScript error handling type safety. Verifies that the codebase properly narrows `unknown` error types before accessing properties like `.message`.
+### `add_command_test.ts`
+Integration tests for the `add` command. Tests the actual decision-making logic extracted into a pure function.
 
-**What it tests:**
-- Error instances are handled correctly
-- Non-Error values (strings, objects, null, undefined) are converted safely
-- Type narrowing pattern works consistently across the codebase
+**What it tests (12 tests):**
+- Help flag handling
+- Task creation (simple and explicit forms)
+- Project creation
+- JSON file detection and routing
+- Plain text file handling
+- Malformed JSON graceful degradation
+- Error cases (empty files, missing parameters, missing titles)
 
-### `commands_test.ts`
-Integration and behavioral tests for command implementations. Tests verify actual behavior including file operations and critical logic patterns.
+**Why it's important:**
+- **Tests marvin-cli behavior**, not JavaScript/Deno
+- **Catches real bugs**: Proven to catch routing logic errors that would corrupt data
+- **No side effects**: Tests pure decision logic without API calls or process exits
+- **Comprehensive coverage**: 12 tests cover all major code paths in add command
 
-**What it tests:**
-- **Help text verification** - Reads source files to verify help text exports exist (4 tests)
-- **Parameter validation patterns** - Verifies command argument parsing (3 tests)
-- **File-based integration test** - Creates temp files to test JSON detection workflow (1 test)
-- **JSON detection logic** - Tests the actual algorithm from add.ts for detecting JSON files (3 tests)
-- **Endpoint routing** - Verifies task vs project API endpoint selection (2 tests)
+**Example bugs it catches:**
+- Reversing task/project routing logic
+- Sending tasks to project API endpoint (data corruption)
+- Sending projects to task API endpoint (data corruption)
+- Breaking JSON detection
+- Breaking file validation
 
-**Why these tests matter:**
-- Help text tests catch missing/broken documentation
-- Integration test demonstrates temp file handling and real I/O
-- JSON detection tests would catch bugs like changing `{` to `[` in the detection logic
-- Endpoint routing tests prevent tasks being sent to project API (data corruption)
+## Testing Philosophy
+
+**What makes a good test:**
+1. **Tests actual code behavior** - Not JavaScript/Deno standard library
+2. **Catches real bugs** - Demonstrated through mutation testing
+3. **No side effects** - Tests pure functions when possible
+4. **Clear failure messages** - Easy to understand what broke
+
+**Refactoring for testability:**
+The `add` command was refactored to extract core decision logic into `src/commands/add_testable.ts`:
+- Pure function with no side effects
+- Takes parameters, options, file content
+- Returns decision object (action, endpoint, body, contentType)
+- Original `add.ts` would call this, then execute the decision
+
+This pattern allows testing without:
+- Mocking Deno.exit()
+- Mocking API calls
+- Managing side effects
 
 ## Writing New Tests
 
-When adding new functionality to marvin-cli, add corresponding tests:
+When adding new functionality:
 
-1. Create a new test file: `tests/feature_name_test.ts`
-2. Import Deno testing utilities:
-   ```typescript
-   import { assertEquals, assertThrows } from "https://deno.land/std@0.184.0/testing/asserts.ts";
-   ```
-3. Write tests using `Deno.test()`:
-   ```typescript
-   Deno.test("Feature - specific behavior", () => {
-     // Your test code
-   });
-   ```
+1. **Extract testable logic** into pure functions
+2. **Write tests first** (TDD) to verify behavior
+3. **Use mutation testing** to verify tests catch bugs
+4. **Document** what the test catches and why it matters
 
-## Mocking
+Example test structure:
+```typescript
+Deno.test("feature - specific behavior", () => {
+  const result = testableFunction(input);
+  assertEquals(result.action, expectedAction);
+  assertEquals(result.value, expectedValue);
+});
+```
 
-For tests that would normally call the Marvin API:
-- Mock the API responses using stub functions
-- Don't make real API calls in automated tests
-- Consider adding manual integration tests in a separate directory
+## Future Tests
 
-## Test Organization
-
-- `error_handling_test.ts` - Type safety and error handling tests (5 tests)
-- `commands_test.ts` - Integration and behavioral tests for commands (13 tests)
-- (Future) `api_call_test.ts` - API request/response handling with mocks
-- (Future) `localStorage_test.ts` - Local storage operations
-- (Future) `jsonl_output_test.ts` - JSONL output format (Phase 1)
-
-**Total: 18 passing tests**
-
-## Continuous Integration
-
-Tests will run automatically on:
-- Pull request creation
-- Pushes to main branch
-- (Future) Before releases
-
-All tests must pass before code can be merged.
+- (Phase 1) `jsonl_output_test.ts` - Tests for --jsonl flag
+- Additional command tests following the add_testable.ts pattern
+- API layer tests with proper mocking
