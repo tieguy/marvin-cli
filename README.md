@@ -60,6 +60,18 @@ Download a release for your platform [here](https://github.com/amazingmarvin/mar
 * Run `./build` (or `BUILD.bat` on windows)
 * Copy `marvin-cli` (or `marvin-cli.exe` on windows) to your path
 
+# Testing
+
+Run the test suite using Deno's built-in test framework:
+
+```bash
+deno test tests/
+```
+
+See `tests/README.md` for more details on the test suite.
+
+For contributors: See `CONTRIBUTING.md` for guidelines on writing tests and submitting pull requests.
+
 # Configuring
 
 Get your API Token from https://app.amazingmarvin.com/pre?api (or find it in the API strategy settings) then run `marvin config apiToken XYZ` or use the `--api-token` command line option.
