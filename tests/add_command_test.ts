@@ -251,3 +251,151 @@ Deno.test("add command - project calls /api/addProject endpoint", async () => {
   cons.restore();
   globalThis.fetch = originalFetch;
 });
+
+/**
+ * Test: Reading from stdin with plain text
+ */
+Deno.test("add command - stdin with plain text creates task", async () => {
+  setOptions({ apiToken: "test-token", quiet: true });
+
+  const exit = mockExit();
+  const cons = mockConsole();
+
+  let calledEndpoint: string | null = null;
+  let calledBody: string | null = null;
+  let calledContentType: string | null = null;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url: string | URL | Request, init?: RequestInit) => {
+    calledEndpoint = url.toString();
+    calledBody = init?.body as string || "";
+    calledContentType = (init?.headers as Record<string, string>)?.["Content-Type"] || null;
+    return new Response(JSON.stringify({ _id: "task789" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  };
+
+  // Mock stdin
+  const originalStdin = Deno.stdin;
+  const stdinContent = "Task from stdin +today";
+  const encoder = new TextEncoder();
+  const stdinData = encoder.encode(stdinContent);
+  let readCount = 0;
+
+  (Deno as any).stdin = {
+    read: async (buffer: Uint8Array) => {
+      if (readCount === 0) {
+        buffer.set(stdinData);
+        readCount++;
+        return stdinData.length;
+      }
+      return null; // EOF
+    }
+  };
+
+  try {
+    await add([], { file: "-" });
+  } catch (e) {
+    if (!(e instanceof ExitError)) throw e;
+  }
+
+  // Verify the endpoint was called correctly
+  assertStringIncludes(calledEndpoint || "", "/api/addTask");
+  assertEquals(calledBody, stdinContent);
+  assertEquals(calledContentType, "text/plain");
+
+  exit.restore();
+  cons.restore();
+  globalThis.fetch = originalFetch;
+  (Deno as any).stdin = originalStdin;
+});
+
+/**
+ * Test: Reading JSON from stdin
+ */
+Deno.test("add command - stdin with JSON creates task", async () => {
+  setOptions({ apiToken: "test-token", quiet: true });
+
+  const exit = mockExit();
+  const cons = mockConsole();
+
+  let calledEndpoint: string | null = null;
+  let calledBody: string | null = null;
+  let calledContentType: string | null = null;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url: string | URL | Request, init?: RequestInit) => {
+    calledEndpoint = url.toString();
+    calledBody = init?.body as string || "";
+    calledContentType = (init?.headers as Record<string, string>)?.["Content-Type"] || null;
+    return new Response(JSON.stringify({ _id: "task999" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  };
+
+  // Mock stdin with JSON
+  const originalStdin = Deno.stdin;
+  const stdinContent = '{"db":"Tasks","title":"JSON task","done":false}';
+  const encoder = new TextEncoder();
+  const stdinData = encoder.encode(stdinContent);
+  let readCount = 0;
+
+  (Deno as any).stdin = {
+    read: async (buffer: Uint8Array) => {
+      if (readCount === 0) {
+        buffer.set(stdinData);
+        readCount++;
+        return stdinData.length;
+      }
+      return null; // EOF
+    }
+  };
+
+  try {
+    await add([], { file: "-" });
+  } catch (e) {
+    if (!(e instanceof ExitError)) throw e;
+  }
+
+  // Verify JSON was detected and sent correctly
+  assertStringIncludes(calledEndpoint || "", "/api/addTask");
+  assertEquals(calledBody, stdinContent);
+  assertEquals(calledContentType, "application/json");
+
+  exit.restore();
+  cons.restore();
+  globalThis.fetch = originalFetch;
+  (Deno as any).stdin = originalStdin;
+});
+
+/**
+ * Test: Empty stdin shows error
+ */
+Deno.test("add command - empty stdin shows error", async () => {
+  setOptions({ apiToken: "test-token", quiet: true });
+
+  const exit = mockExit();
+  const cons = mockConsole();
+
+  const originalStdin = Deno.stdin;
+  (Deno as any).stdin = {
+    read: async (buffer: Uint8Array) => {
+      return null; // Immediate EOF (empty stdin)
+    }
+  };
+
+  try {
+    await add([], { file: "-" });
+  } catch (e) {
+    if (!(e instanceof ExitError)) throw e;
+  }
+
+  assertEquals(exit.exitCode, 1);
+  assertStringIncludes(cons.stderr, "Stdin was empty");
+
+  exit.restore();
+  cons.restore();
+  (Deno as any).stdin = originalStdin;
+});
