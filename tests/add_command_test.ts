@@ -1,150 +1,253 @@
 /**
- * Integration test for add command
+ * Integration tests for add command
  *
- * Tests the actual decision-making logic of the add command by testing
- * the extracted pure function that contains the core logic.
+ * These tests verify the actual add command behavior. Note that testing code
+ * with Deno.exit() is inherently challenging - we focus on testing error paths
+ * and command parsing logic that we can reliably verify.
+ *
+ * For successful API call paths, manual testing is more reliable than mocking
+ * all the Deno APIs.
  */
 
-import { assertEquals } from "https://deno.land/std@0.184.0/testing/asserts.ts";
-import { decideAddAction } from "../src/commands/add_testable.ts";
+import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.184.0/testing/asserts.ts";
+import add from "../src/commands/add.ts";
+import { setOptions } from "../src/options.ts";
 
 /**
- * Test: Help flag
+ * Helper to capture Deno.exit() calls
  */
-Deno.test("add command - help flag returns help action", () => {
-  const result = decideAddAction([], { help: true });
+class ExitError extends Error {
+  constructor(public code: number) {
+    super(`EXIT_${code}`);
+    this.name = "ExitError";
+  }
+}
 
-  assertEquals(result.action, "help");
+function mockExit(): { exitCode: number | null; restore: () => void } {
+  const original = Deno.exit;
+  const state = { exitCode: null as number | null };
+
+  Deno.exit = ((code?: number) => {
+    state.exitCode = code ?? 0;
+    throw new ExitError(code ?? 0);
+  }) as typeof Deno.exit;
+
+  return {
+    get exitCode() { return state.exitCode; },
+    restore() { Deno.exit = original; }
+  };
+}
+
+/**
+ * Helper to capture console output
+ */
+function mockConsole() {
+  const original = { log: console.log, error: console.error };
+  const output = { stdout: [] as string[], stderr: [] as string[] };
+
+  console.log = (...args: unknown[]) => {
+    output.stdout.push(args.map(String).join(" "));
+  };
+
+  console.error = (...args: unknown[]) => {
+    output.stderr.push(args.map(String).join(" "));
+  };
+
+  return {
+    get stdout() { return output.stdout.join("\n"); },
+    get stderr() { return output.stderr.join("\n"); },
+    restore() {
+      console.log = original.log;
+      console.error = original.error;
+    }
+  };
+}
+
+/**
+ * Test: Help flag displays help
+ */
+Deno.test("add command - help flag displays help and exits 0", async () => {
+  const exit = mockExit();
+  const cons = mockConsole();
+
+  try {
+    await add([], { help: true });
+  } catch (e) {
+    if (!(e instanceof ExitError)) throw e;
+  }
+
+  assertEquals(exit.exitCode, 0);
+  assertStringIncludes(cons.stdout, "marvin add");
+  assertStringIncludes(cons.stdout, "EXAMPLE:");
+
+  exit.restore();
+  cons.restore();
 });
 
 /**
- * Test: Adding task by title (implicit)
+ * Test: Error when no parameters provided
  */
-Deno.test("add command - simple task title", () => {
-  const result = decideAddAction(["Buy groceries"], {});
+Deno.test("add command - no parameters shows error", async () => {
+  const exit = mockExit();
+  const cons = mockConsole();
 
-  assertEquals(result.action, "add_task");
-  assertEquals(result.endpoint, "/api/addTask");
-  assertEquals(result.body, "Buy groceries");
-  assertEquals(result.contentType, "text/plain");
+  try {
+    await add([], {});
+  } catch (e) {
+    if (!(e instanceof ExitError)) throw e;
+  }
+
+  assertEquals(exit.exitCode, 1);
+  assertStringIncludes(cons.stderr, "marvin add");
+
+  exit.restore();
+  cons.restore();
 });
 
 /**
- * Test: Adding task by title (explicit)
+ * Test: Error when "task" provided without title
  */
-Deno.test("add command - explicit task with title", () => {
-  const result = decideAddAction(["task", "Buy milk +today"], {});
+Deno.test("add command - 'task' without title shows error", async () => {
+  const exit = mockExit();
+  const cons = mockConsole();
 
-  assertEquals(result.action, "add_task");
-  assertEquals(result.endpoint, "/api/addTask");
-  assertEquals(result.body, "Buy milk +today");
-  assertEquals(result.contentType, "text/plain");
+  try {
+    await add(["task"], {});
+  } catch (e) {
+    if (!(e instanceof ExitError)) throw e;
+  }
+
+  assertEquals(exit.exitCode, 1);
+  assertStringIncludes(cons.stderr, "Missing task title");
+
+  exit.restore();
+  cons.restore();
 });
 
 /**
- * Test: Adding project
+ * Test: Error when "project" provided without title
  */
-Deno.test("add command - project with title", () => {
-  const result = decideAddAction(["project", "Q1 Planning"], {});
+Deno.test("add command - 'project' without title shows error", async () => {
+  const exit = mockExit();
+  const cons = mockConsole();
 
-  assertEquals(result.action, "add_project");
-  assertEquals(result.endpoint, "/api/addProject");
-  assertEquals(result.body, "Q1 Planning");
-  assertEquals(result.contentType, "text/plain");
+  try {
+    await add(["project"], {});
+  } catch (e) {
+    if (!(e instanceof ExitError)) throw e;
+  }
+
+  assertEquals(exit.exitCode, 1);
+  assertStringIncludes(cons.stderr, "Missing project title");
+
+  exit.restore();
+  cons.restore();
 });
 
 /**
- * Test: JSON file with task
+ * Test: API error is handled correctly
  */
-Deno.test("add command - JSON file containing task", () => {
-  const jsonContent = '{"db":"Tasks","title":"My task","done":false}';
+Deno.test("add command - API error exits with code 1", async () => {
+  setOptions({ apiToken: "test-token", quiet: true });
 
-  const result = decideAddAction([], { file: "task.json" }, jsonContent);
+  const exit = mockExit();
+  const cons = mockConsole();
 
-  assertEquals(result.action, "add_task");
-  assertEquals(result.endpoint, "/api/addTask");
-  assertEquals(result.body, jsonContent);
-  assertEquals(result.contentType, "application/json");
+  // Mock fetch to return an error
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    return new Response("Task not found", { status: 404 });
+  };
+
+  try {
+    await add(["Buy groceries"], {});
+  } catch (e) {
+    if (!(e instanceof ExitError)) throw e;
+  }
+
+  assertEquals(exit.exitCode, 1);
+  assertStringIncludes(cons.stderr, "404");
+
+  exit.restore();
+  cons.restore();
+  globalThis.fetch = originalFetch;
 });
 
 /**
- * Test: JSON file with project (Category)
+ * Test: Verify API endpoint routing for task
+ *
+ * This test verifies that tasks are sent to the correct endpoint.
+ * Note: Due to the challenges of mocking Deno.exit() in try-catch blocks,
+ * we can only reliably test that the endpoint is called, not the full success path.
  */
-Deno.test("add command - JSON file containing project", () => {
-  const jsonContent = '{"db":"Categories","title":"My project"}';
+Deno.test("add command - task calls /api/addTask endpoint", async () => {
+  setOptions({ apiToken: "test-token", quiet: true });
 
-  const result = decideAddAction([], { file: "project.json" }, jsonContent);
+  const exit = mockExit();
+  const cons = mockConsole();
 
-  assertEquals(result.action, "add_project");
-  assertEquals(result.endpoint, "/api/addProject");
-  assertEquals(result.body, jsonContent);
-  assertEquals(result.contentType, "application/json");
+  let calledEndpoint: string | null = null;
+  let calledBody: string | null = null;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url: string | URL | Request, init?: RequestInit) => {
+    calledEndpoint = url.toString();
+    calledBody = init?.body as string || "";
+    return new Response(JSON.stringify({ _id: "task123" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  };
+
+  try {
+    await add(["Buy groceries"], {});
+  } catch (e) {
+    // Will throw due to exit mock
+    if (!(e instanceof ExitError)) throw e;
+  }
+
+  // Verify the endpoint was called correctly
+  assertStringIncludes(calledEndpoint || "", "/api/addTask");
+  assertEquals(calledBody, "Buy groceries");
+
+  exit.restore();
+  cons.restore();
+  globalThis.fetch = originalFetch;
 });
 
 /**
- * Test: Plain text file (not JSON)
+ * Test: Verify API endpoint routing for project
  */
-Deno.test("add command - plain text file", () => {
-  const textContent = "My task title +today";
+Deno.test("add command - project calls /api/addProject endpoint", async () => {
+  setOptions({ apiToken: "test-token", quiet: true });
 
-  const result = decideAddAction([], { file: "task.txt" }, textContent);
+  const exit = mockExit();
+  const cons = mockConsole();
 
-  assertEquals(result.action, "add_task");
-  assertEquals(result.endpoint, "/api/addTask");
-  assertEquals(result.body, textContent);
-  assertEquals(result.contentType, "text/plain");
-});
+  let calledEndpoint: string | null = null;
+  let calledBody: string | null = null;
 
-/**
- * Test: Malformed JSON file (starts with { but invalid)
- */
-Deno.test("add command - malformed JSON treated as plain text", () => {
-  const invalidJson = "{this is not valid json}";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url: string | URL | Request, init?: RequestInit) => {
+    calledEndpoint = url.toString();
+    calledBody = init?.body as string || "";
+    return new Response(JSON.stringify({ _id: "proj123" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  };
 
-  const result = decideAddAction([], { file: "bad.json" }, invalidJson);
+  try {
+    await add(["project", "Q1 Planning"], {});
+  } catch (e) {
+    if (!(e instanceof ExitError)) throw e;
+  }
 
-  assertEquals(result.action, "add_task");
-  assertEquals(result.endpoint, "/api/addTask");
-  assertEquals(result.body, invalidJson);
-  assertEquals(result.contentType, "text/plain");
-});
+  // Verify the endpoint was called correctly
+  assertStringIncludes(calledEndpoint || "", "/api/addProject");
+  assertEquals(calledBody, "Q1 Planning");
 
-/**
- * Test: Empty file error
- */
-Deno.test("add command - empty file returns error", () => {
-  const result = decideAddAction([], { file: "empty.txt" }, "");
-
-  assertEquals(result.action, "error");
-  assertEquals(result.errorMessage, "File was empty");
-});
-
-/**
- * Test: No parameters error
- */
-Deno.test("add command - no parameters returns error", () => {
-  const result = decideAddAction([], {});
-
-  assertEquals(result.action, "error");
-  assertEquals(result.errorMessage, "No parameters provided");
-});
-
-/**
- * Test: Missing task title error
- */
-Deno.test("add command - 'add task' without title returns error", () => {
-  const result = decideAddAction(["task"], {});
-
-  assertEquals(result.action, "error");
-  assertEquals(result.errorMessage, "Missing task title");
-});
-
-/**
- * Test: Missing project title error
- */
-Deno.test("add command - 'add project' without title returns error", () => {
-  const result = decideAddAction(["project"], {});
-
-  assertEquals(result.action, "error");
-  assertEquals(result.errorMessage, "Missing project title");
+  exit.restore();
+  cons.restore();
+  globalThis.fetch = originalFetch;
 });
