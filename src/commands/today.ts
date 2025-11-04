@@ -28,7 +28,8 @@ export default async function today(params: Params, cmdOpt: Options) {
     Deno.exit(0);
   }
 
-  console.log(items);
+  // Output valid JSON (not JavaScript notation)
+  console.log(JSON.stringify(items));
   Deno.exit(0);
 }
 
