@@ -49,6 +49,34 @@ DESKTOP COMMANDS:
     quit     - Shut down the app (not yet implemented)
 ```
 
+## Output Formats
+
+Many commands support different output formats via flags:
+
+**Commands with format options:** `today`, `due`, `list`
+- `--json` - Output valid JSON (default)
+- `--csv` - Output as CSV with headers
+- `--text` - Output only task titles (one per line)
+
+**Commands with JSON-only output:** `get`, `tracking`
+- `--json` - Output valid JSON (when used with these commands)
+- Default output uses human-readable JavaScript notation
+
+**Examples:**
+```bash
+# Get today's tasks as JSON (default)
+marvin today
+
+# Get today's tasks as CSV
+marvin today --csv
+
+# Get today's tasks as plain text titles
+marvin today --text
+
+# Get a specific task with JSON output
+marvin get TASK_ID --json
+```
+
 # Installation
 
 Download a release for your platform [here](https://github.com/amazingmarvin/marvin-cli/releases).
