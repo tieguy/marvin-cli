@@ -13,8 +13,43 @@ export default async function add(params: Params, cmdOpt: Options) {
   // echo "example" | marvin add --file=-
   if (params.length === 0 && cmdOpt.file === "-") {
     // Read stdin
-    console.log("Not yet implemented");
-    Deno.exit(1);
+    try {
+      const chunks: Uint8Array[] = [];
+      const buffer = new Uint8Array(1024);
+
+      while (true) {
+        const bytesRead = await Deno.stdin.read(buffer);
+        if (bytesRead === null) break;
+        chunks.push(buffer.slice(0, bytesRead));
+      }
+
+      const decoder = new TextDecoder();
+      const stdinContent = decoder.decode(new Uint8Array(chunks.flatMap(chunk => Array.from(chunk))));
+
+      if (!stdinContent || !stdinContent.trim()) {
+        throw new Error("Stdin was empty");
+      }
+
+      let contentType = "text/plain", endpoint = "/api/addTask";
+
+      // Detect JSON from stdin
+      if (stdinContent.trim()[0] === "{") {
+        try {
+          const item = JSON.parse(stdinContent);
+          contentType = "application/json";
+          if (item.db === "Categories") {
+            endpoint = "/api/addProject";
+          }
+        } catch (err) { } // eslint-disable-line
+      }
+
+      const res = await POST(endpoint, stdinContent, { "Content-Type": contentType });
+      await printResult(res);
+      Deno.exit(0);
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+      Deno.exit(1);
+    }
   }
 
   // marvin add --file=task.json
@@ -42,7 +77,7 @@ export default async function add(params: Params, cmdOpt: Options) {
       await printResult(res);
       Deno.exit(0);
     } catch (err) {
-      console.error(err.message);
+      console.error(err instanceof Error ? err.message : String(err));
       Deno.exit(1);
     }
   }
@@ -70,7 +105,7 @@ export default async function add(params: Params, cmdOpt: Options) {
       await printResult(res);
       Deno.exit(0);
     } catch (err) {
-      console.error(err.message);
+      console.error(err instanceof Error ? err.message : String(err));
       Deno.exit(1);
     }
   }
@@ -82,7 +117,7 @@ export default async function add(params: Params, cmdOpt: Options) {
       await printResult(res);
       Deno.exit(0);
     } catch (err) {
-      console.error(err.message);
+      console.error(err instanceof Error ? err.message : String(err));
       Deno.exit(1);
     }
   }
